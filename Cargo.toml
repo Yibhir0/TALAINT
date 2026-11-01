@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["crates/talaint-core", "crates/talaint-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85"
+
+[workspace.dependencies]
+talaint-core = { path = "crates/talaint-core" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }

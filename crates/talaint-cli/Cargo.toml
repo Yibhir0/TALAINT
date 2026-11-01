@@ -1,0 +1,15 @@
+[package]
+name = "talaint-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "talaint"
+path = "src/main.rs"
+
+[dependencies]
+talaint-core.workspace = true
+clap.workspace = true
+anyhow.workspace = true

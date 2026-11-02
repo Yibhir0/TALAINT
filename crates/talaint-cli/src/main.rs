@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use talaint_core::{ChangeFrequency, DataFormat, HttpSourceConfig, Purpose};
 
@@ -19,14 +19,20 @@ enum Command {
         /// URL of the data source.
         #[arg(long)]
         url: String,
-        /// Format: csv | json | jsonl | parquet | xml.
-        #[arg(long)]
+        /// Format of the data.
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new([
+            "csv", "json", "jsonl", "parquet", "xml",
+        ]))]
         format: String,
-        /// How often the data changes: once | hourly | daily | weekly | monthly.
-        #[arg(long)]
+        /// How often the data changes.
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new([
+            "once", "hourly", "daily", "weekly", "monthly",
+        ]))]
         change_frequency: String,
-        /// Intended use: analytics | rag | agent | search | other.
-        #[arg(long)]
+        /// Intended use of the data.
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new([
+            "analytics", "rag", "agent", "search", "other",
+        ]))]
         purpose: String,
     },
 }
@@ -63,14 +69,9 @@ fn build_config(
     change_frequency: &str,
     purpose: &str,
 ) -> Result<HttpSourceConfig> {
-    let format =
-        DataFormat::parse(format).with_context(|| format!("unknown format: {format}"))?;
-
-    let change_frequency = ChangeFrequency::parse(change_frequency)
-        .with_context(|| format!("unknown change frequency: {change_frequency}"))?;
-
-    let purpose =
-        Purpose::parse(purpose).with_context(|| format!("unknown purpose: {purpose}"))?;
+    let format: DataFormat = format.parse()?;
+    let change_frequency: ChangeFrequency = change_frequency.parse()?;
+    let purpose: Purpose = purpose.parse()?;
 
     Ok(HttpSourceConfig::new(
         url,

@@ -1,6 +1,6 @@
 # TALAINT Architecture
 
-Status: **v0.2 — reduced scope** (Phase 0 skeleton)
+Status: **v0.3 — reduced scope** (Phase 0 skeleton)
 License: Apache-2.0
 
 ## 0. Current scope (start small)
@@ -14,6 +14,18 @@ We build in slices. **Now:**
   Detection, networking, persistence, jobs, and events are added one phase at a time.
 
 The wider design below is the target; anything marked *deferred* is not built yet.
+
+## 0a. What the code can do today
+
+| Command | Behavior |
+|---|---|
+| `talaint version` | prints `talaint 0.1.0` |
+| `talaint configure --url ... --format ... --change-frequency ... --purpose ...` | validates the args and prints the parsed config |
+| `talaint configure --help` | lists commands and allowed values |
+| invalid args | rejected by clap with a suggestion; exit code 2 |
+
+It does **not** fetch the URL, detect the format, persist anything, connect to a
+database, or run jobs. It only accepts and validates configuration intent.
 
 ## 1. Vision
 
@@ -59,7 +71,7 @@ Today this only parses and prints the config. Later phases:
 - persist it in Postgres, attached to a tenant;
 - fetch the URL and **detect** the real format;
 - compare declared vs observed and record conflicts;
-- create jobs/events based on `change_frequency`.
+- create runs/jobs based on `change_frequency`.
 
 ## 4. Logical architecture (target)
 
@@ -94,7 +106,7 @@ Today this only parses and prints the config. Later phases:
 ## 5. Data model (target, Postgres)
 
 ```
-tenants(id, slug, name, status, plan, created_at, updated_at)
+tenants(id, slug, name, status, created_at, updated_at)
 
 secrets(id, tenant_id, name, kind, ciphertext, key_id, created_at, updated_at)
 
@@ -116,6 +128,14 @@ audit_log(id, tenant_id, actor_id, action, entity_type, entity_id,
 
 Not built yet. This is what Phase 2 will create.
 
+### `secrets.key_id`
+
+`key_id` identifies the **master key (and version)** used in envelope encryption:
+the secret is encrypted with a random data key, and that data key is wrapped by
+the master key. On decrypt: look up the master key by `key_id`, unwrap the data
+key, decrypt `ciphertext`, then zeroize. This enables key rotation and BYOK
+without re-encrypting every secret at once.
+
 ### Declared / observed / effective
 
 - **Declared**: what the tenant configured.
@@ -124,6 +144,32 @@ Not built yet. This is what Phase 2 will create.
 
 Merge rule (deterministic): declared wins; observed fills gaps; conflicts are
 recorded; output ordering is stable.
+
+`detection_policy` decides how declared and detected are reconciled:
+
+| Policy | Behavior |
+|---|---|
+| `auto` | detect and use the observed format; declared is only a hint |
+| `declared_only` | trust the tenant; skip detection |
+| `verify` | detect, compare, record a conflict if they differ; tenant confirms |
+
+`merge(declared, observed, policy)` is a pure function: same inputs always
+produce the same effective result (no randomness, no timestamps, stable order).
+
+### Schema snapshots
+
+Each dataset gets versioned snapshots per layer:
+
+- **declared** — built from tenant config.
+- **observed** — inferred by the catalog after reading data.
+- **merged** — deterministic merge of the two; used by downstream steps.
+
+`fields` is a JSONB array of field definitions:
+`name, path, data_type, nullable, semantic_type, pii, description`.
+
+The Modeler/Embedder reads the latest **merged** snapshot to decide what to
+chunk/embed, what is PII, and what becomes entities/relations. Diffing versions
+detects schema drift.
 
 ## 6. Detection (deferred to Phase 3)
 
@@ -178,6 +224,35 @@ Simplified implementation first; scheduler, streaming, and DLQ are hooks.
 
 Triggers: on-demand, scheduled, event/webhook, streaming.
 
+## 9a. Deduplication and runs
+
+Config is created/edited by the tenant, **not per ingest**. Each execution is a
+**run** that references the config and carries a checkpoint.
+
+```
+tenant config (once) ─► run #1 (idempotency key, checkpoint) ─► rows (dedup by doc_id)
+                     └► run #2 ...
+```
+
+Deduplication happens at three levels:
+
+1. **Source:** skip unchanged data using `ETag`, `Last-Modified`, and a content hash.
+2. **Run:** `idempotency_key = hash(tenant_id, source_id, config_version, checkpoint)`;
+   a repeated key returns the previous result instead of redoing work.
+3. **Record:** deterministic IDs:
+   - `doc_id = hash(tenant_id, dataset_id, natural_key)` (or normalized content hash)
+   - `chunk_id = hash(doc_id, chunk_index, chunk_text_hash)`
+   - embeddings keyed by `(tenant_id, dataset_id, doc_id, chunk_id, model)`
+
+ClickHouse uses `ReplacingMergeTree(updated_at)` ordered by
+`(tenant_id, dataset_id, doc_id)` so duplicate keys collapse to the newest row
+(use `FINAL`/`argMax` for exact reads), plus `insert_deduplication_token` per
+run to drop identical retries. Re-embedding with a new model uses a new key.
+
+Future `ingest_runs` table (Postgres):
+`id, tenant_id, data_source_id, dataset_id, idempotency_key, config_version,
+ checkpoint, content_hash, status, rows_in, rows_out, started_at, finished_at`.
+
 ## 10. Component contracts (introduced gradually)
 
 ```rust
@@ -208,7 +283,7 @@ Only the config skeleton exists today. Traits arrive with their phases.
 | 1 | richer config types + validation + tests | traits, `FromStr`, error types |
 | 2 | Postgres: tenants + sources + RLS | sqlx, async/await, lifetimes |
 | 3 | HTTP fetch + format detection + comparison | `Stream`, bytes, backpressure |
-| 4 | jobs/events (simplified) | tokio tasks, channels, retries |
+| 4 | runs/jobs (simplified) + dedup | tokio tasks, channels, retries |
 | 5 | ClickHouse writer + embedder + serving | adapters, batching |
 | 6 | HTTP API + web UI | axum, middleware |
 
@@ -226,3 +301,5 @@ Only the config skeleton exists today. Traits arrive with their phases.
 | 8 | At-least-once + idempotency | Simpler than exactly-once, safe reruns |
 | 9 | HTTP-only + Postgres/ClickHouse first | Reduce scope so each step is learnable |
 | 10 | MinIO, S3, file, DB, MCP deferred | Add only when the HTTP path works |
+| 11 | Config is long-lived; ingest creates runs | Avoid recreating config per ingest |
+| 12 | Deterministic IDs + ReplacingMergeTree | Prevent duplicate rows, safe retries |

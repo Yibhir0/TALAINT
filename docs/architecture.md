@@ -1,20 +1,19 @@
 # TALAINT Architecture
 
-Status: **target architecture** (future). The current buildable design is in
-[`configuration-phase.md`](configuration-phase.md).
+Status: **v0.3 — reduced scope** (Phase 0 skeleton)
 License: Apache-2.0
 
 ## 0. Current scope (start small)
 
-We build in slices. The **current phase** is the configuration layer — see
-[`configuration-phase.md`](configuration-phase.md) for the detailed, minimal design.
-The wider design below is the target; anything marked *deferred* is not built yet.
+We build in slices. **Now:**
 
-- Sources: **HTTP first**. (File uploads, S3, Postgres, MCP come later.)
+- Sources: **HTTP only**. (File uploads, S3, Postgres, MCP come later.)
 - Databases: **Postgres** (the layer's own DB) + **ClickHouse** (AI-native warehouse).
 - **MinIO / Parquet lake is deferred.**
 - Code is a **skeleton**: configuration types + a CLI that parses parameters.
   Detection, networking, persistence, jobs, and events are added one phase at a time.
+
+The wider design below is the target; anything marked *deferred* is not built yet.
 
 ## 0a. What the code can do today
 

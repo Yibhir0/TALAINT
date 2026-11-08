@@ -266,9 +266,25 @@ off `:9000` later; the same stack runs in CI.
 
 ## 10. Deferred and next steps
 
-**Deferred (agent, later):** JSON schemas per tool, structured errors, `plan` as an
-approval gate, non-interactive flags, MCP wrapper, scoped credentials.
+**Deferred:** JSON schemas per tool, structured errors, `plan` as an approval gate,
+non-interactive flags, scoped credentials.
 
 **Next design steps:** finalize descriptor fields (`http`, `postgres`, `clickhouse`),
 finalize the YAML config schema, finalize CLI names/flags/output — then implement in
 order: core types → registry → repository → CLI → connectors → test stack.
+
+**Idea (deferred with the dataset phase): derive the pipeline from the configs.**
+Once the client has configured the source(s) and destination(s), we can *propose* the
+transformation instead of asking for it up front:
+
+- introspect both ends (`infer_schema` / `describe` capabilities),
+- match columns by name and type, infer keys and write mode,
+- use `purpose` to pick a default strategy (analytics → union/upsert, rag → chunk/embed,
+  search → index, agent → append),
+- show the result as a `plan` (`+ create`, `~ update`, `= no change`) for the client to
+  review and override.
+
+This is inference, not truth: business rules, joins across sources, unit conversions and
+PII handling still need explicit mapping. The configs give us enough to start; `plan`
+makes the assumption visible and correctable.
+

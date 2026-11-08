@@ -11,10 +11,11 @@ Configure -> Ingest -> Understand -> Model -> Embed/Index -> Serve
 ```
 
 > **Status: early foundation (v0.1.0).** The repository currently contains the
-> configuration domain model and a working CLI that validates and prints source
-> configuration. Networking, detection, persistence, jobs, and serving are added
-> one phase at a time. See [Current status](#current-status) and
-> [`docs/architecture.md`](docs/architecture.md).
+> core domain primitives, a CLI skeleton (`talaint version`), and a containerized
+> test stack (`talaint-net`). The descriptor-driven configuration CLI is the next
+> step. See [Current status](#current-status),
+> [`docs/requirements.md`](docs/requirements.md), and
+> [`docs/configuration-phase.md`](docs/configuration-phase.md).
 
 ---
 
@@ -59,20 +60,26 @@ What works today:
 | Command | Behavior |
 |---|---|
 | `talaint version` | Prints `talaint 0.1.0` |
-| `talaint configure --url ... --format ... --change-frequency ... --purpose ...` | Validates the arguments and prints the parsed configuration |
-| `talaint configure --help` | Lists the command and all allowed values |
-| Invalid arguments | Rejected with a suggestion; exit code `2` |
 
-Domain model already implemented in `talaint-core`:
+Core domain (`talaint-core`):
 
 - `DataFormat`, `ChangeFrequency`, `Purpose` with `FromStr` parsing.
 - Typed `ConfigError`.
-- `HttpSourceConfig` (declared), `ObservedConfig`, `EffectiveConfig`, and a
-  deterministic `merge` that records conflicts while keeping declared values
-  authoritative.
+- `version()` surfaced by the CLI.
 
-**Not implemented yet:** HTTP fetching, format detection, Postgres/ClickHouse,
-jobs, embeddings, API, web UI, authentication, and the agent.
+Test stack:
+
+- `docker compose up -d` starts the `talaint-net` network and the services
+  `config-db`, `source-pg`, `source-mysql`, `http-source`, `dest-pg`, and
+  `clickhouse`.
+- Seed scripts are organized by purpose: `analytics`, `rag`, `agent`, `search`,
+  `other`.
+
+**In progress:** descriptor-driven configuration CLI (`connector list`,
+`source add/list/test`, `destination add/list/test`, `plan`, `apply`).
+
+**Not implemented yet:** ingest, transform, dataset/mapping, runs, serving, API,
+web UI, authentication, and the agent.
 
 Exit codes: `0` success, `1` runtime error, `2` usage error.
 
@@ -132,6 +139,17 @@ cargo --version
 >
 > or open a new terminal.
 
+You also need **Docker Desktop** (Windows/macOS) or Docker Engine + Compose
+(Linux) for the local test stack:
+
+```bash
+docker --version
+docker compose version
+```
+
+> **Windows/macOS:** start Docker Desktop and wait until `docker info` succeeds
+> before running `docker compose`.
+
 ### 2. Get the code
 
 ```bash
@@ -155,7 +173,38 @@ The binary is written to:
 | macOS | `target/release/talaint` |
 | Linux | `target/release/talaint` |
 
-### 4. Run
+### 4. Start the test environment
+
+The local stack runs on the `talaint-net` Docker network:
+
+```bash
+docker compose up -d --wait
+```
+
+Check it:
+
+```bash
+docker compose ps
+docker network inspect talaint-net --format '{{.Name}}'
+```
+
+| Service | Host port | Role |
+|---|---|---|
+| `config-db` | 5432 | config store |
+| `source-pg` | 5433 | SQL source |
+| `source-mysql` | 3306 | SQL source |
+| `http-source` | 8080 | HTTP source |
+| `dest-pg` | 5434 | SQL destination |
+| `clickhouse` | 8123 / 9000 | warehouse |
+
+Init scripts under `docker/init/` seed the sources and prepare the destinations.
+They run only on first initialization; reset everything with:
+
+```bash
+docker compose down -v
+```
+
+### 5. Run
 
 **From the source tree, without installing:**
 
@@ -163,13 +212,8 @@ The binary is written to:
 cargo run -p talaint-cli -- version
 ```
 
-```bash
-cargo run -p talaint-cli -- configure \
-  --url https://example.com/sales.csv \
-  --format csv \
-  --change-frequency daily \
-  --purpose rag
-```
+The configuration commands are being added next; see
+[`docs/requirements.md`](docs/requirements.md).
 
 **From the built binary:**
 
@@ -203,38 +247,20 @@ normally already on `PATH`.
 talaint version
 ```
 
-### Configure an HTTP source
+### Configuration (next step)
 
-```bash
-talaint configure \
-  --url https://example.com/sales.csv \
-  --format csv \
-  --change-frequency daily \
-  --purpose rag
-```
+The descriptor-driven configuration commands are being implemented:
 
-Output:
-
-```
-configured HTTP source
-  url              : https://example.com/sales.csv
-  format           : csv
-  change frequency : daily
-  purpose          : rag
-```
-
-Allowed values:
-
-| Flag | Values |
+| Command | Purpose |
 |---|---|
-| `--format` | `csv`, `json`, `jsonl`, `parquet`, `xml` |
-| `--change-frequency` | `once`, `hourly`, `daily`, `weekly`, `monthly` |
-| `--purpose` | `analytics`, `rag`, `agent`, `search`, `other` |
+| `talaint connector list` | Show connector kinds and their fields |
+| `talaint source add/list/test` | Create, list, and test sources |
+| `talaint destination add/list/test` | Create, list, and test destinations |
+| `talaint plan -f talaint.yaml` | Preview changes |
+| `talaint apply -f talaint.yaml` | Commit changes |
 
-Values are case-insensitive. Run `talaint configure --help` for the full list.
-
-> Today `configure` only validates and prints the configuration. It does not
-> fetch the URL, detect the format, persist anything, or start a job.
+See [`docs/configuration-phase.md`](docs/configuration-phase.md) for the design
+and [`docs/requirements.md`](docs/requirements.md) for the phase plan.
 
 ---
 
@@ -259,17 +285,29 @@ Build the whole workspace:
 cargo build
 ```
 
+### Test environment
+
+```bash
+docker compose up -d --wait
+docker compose ps
+docker compose down -v
+```
+
 ### Project layout
 
 ```
 TALAINT/
 ├── Cargo.toml                  workspace (edition 2024, Rust 1.85+)
 ├── rust-toolchain.toml         pinned stable toolchain
+├── docker-compose.yml          talaint-net test stack
+├── docker/init/                purpose-based seed scripts
 ├── crates/
-│   ├── talaint-core/           domain types, errors, deterministic merge
+│   ├── talaint-core/           domain types, errors
 │   └── talaint-cli/            the `talaint` binary (clap)
 └── docs/
-    └── architecture.md         full design, data model, roadmap, decisions
+    ├── requirements.md         what we build across phases
+    ├── configuration-phase.md  phase 1 design
+    └── architecture.md         target architecture
 ```
 
 ---
@@ -279,7 +317,7 @@ TALAINT/
 1. Start small; add one concept per phase.
 2. Ports and adapters: domain code depends on traits, not stores.
 3. Source is not format: one connector can serve many formats.
-4. Declared / observed / effective: declared intent wins, conflicts are recorded.
+4. Descriptors are shared; configs are per tenant.
 5. Deterministic behavior and deterministic IDs.
 6. Tenant isolation enforced in every store.
 7. Secrets are references, never configuration.
@@ -289,19 +327,14 @@ TALAINT/
 
 ## Roadmap
 
-| Phase | Build | Rust focus |
-|---|---|---|
-| 0 | Toolchain, workspace, config skeleton CLI | structs, enums, `Option`, `Result` |
-| 1 | Richer config types, validation, tests | traits, `FromStr`, error types |
-| 2 | Postgres: tenants + sources + RLS | `sqlx`, async/await, lifetimes |
-| 3 | HTTP fetch + format detection + comparison | `Stream`, bytes, backpressure |
-| 4 | Runs/jobs (simplified) + deduplication | tokio tasks, channels, retries |
-| 5 | ClickHouse writer + embedder + serving | adapters, batching |
-| 6 | HTTP API + web UI | axum, middleware |
-| later | MCP tools, `talaint-agent`, agent-to-agent | tool schemas, agent loops |
+| Phase | Build |
+|---|---|
+| 1 | Configuration: descriptors, registry, source/destination configs, CLI, test stack |
+| 2 | Dataset/mapping/transform: bind sources to destinations, derive mapping, execute, verify |
+| 3 | Agent integration: expose the validated tools to an agent |
 
-The full design — data model, detection strategy, deduplication, security, and
-the decisions log — lives in [`docs/architecture.md`](docs/architecture.md).
+See [`docs/requirements.md`](docs/requirements.md) for the phase plan and
+[`docs/architecture.md`](docs/architecture.md) for the target architecture.
 
 ---
 

@@ -1,4 +1,4 @@
-﻿-- 0001_init.sql (foundation control plane)
+-- 0001_init.sql (foundation control plane)
 -- To be applied with sqlx/migrations tooling during M1.
 
 CREATE TABLE IF NOT EXISTS tenants (

@@ -1,4 +1,4 @@
-﻿use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -32,10 +32,11 @@ pub async fn claim_next_job_for_source_tx(
     now: DateTime<Utc>,
 ) -> Result<(ClaimedRunState, Option<JobRow>), sqlx::Error> {
     // Lock the source row to serialize claim decisions per source.
-    let src_exists = sqlx::query_scalar::<_, Uuid>("SELECT id FROM sources WHERE id = $1 FOR UPDATE")
-        .bind(source_id)
-        .fetch_optional(&mut **tx)
-        .await?;
+    let src_exists =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM sources WHERE id = $1 FOR UPDATE")
+            .bind(source_id)
+            .fetch_optional(&mut **tx)
+            .await?;
     if src_exists.is_none() {
         return Ok((ClaimedRunState::SourceNotFound, None));
     }
@@ -81,7 +82,11 @@ pub async fn claim_next_job_for_source_tx(
     }
 }
 
-pub async fn heartbeat(pool: &PgPool, job_id: Uuid, now: DateTime<Utc>) -> Result<bool, sqlx::Error> {
+pub async fn heartbeat(
+    pool: &PgPool,
+    job_id: Uuid,
+    now: DateTime<Utc>,
+) -> Result<bool, sqlx::Error> {
     let res = sqlx::query(
         "UPDATE pipeline_jobs SET heartbeat_at = $2 WHERE id = $1 AND status = 'running'",
     )

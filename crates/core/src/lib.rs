@@ -94,17 +94,12 @@ impl FromStr for JobStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InitialSync {
+    #[default]
     Full,
     Latest,
-}
-
-impl Default for InitialSync {
-    fn default() -> Self {
-        InitialSync::Full
-    }
 }
 
 impl InitialSync {

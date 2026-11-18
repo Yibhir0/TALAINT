@@ -69,13 +69,13 @@ Parsing lives on the **source**, not the pipeline or intent.
 
 ## 5. Templates and Discovery UX
 
-- **Templates:** `init --source <type>`, `init --intent <intent>`
+- **Templates:** `init --source <type>`, `init --intent <intent>`, `generate --intent <intent> -f <file> [--source <spec>]...`
 - **Discovery:** `list sources`, `list intents`, `list formats`
 - **Validation:** `validate -f <file>`
 - **Preview:** `apply --dry-run -f <file>` (shows plan/parse intent, destination dataset, changes)
 - **Health check:** `source test -f <file>`
 
-Templates include commented defaults. Validation errors state what is missing and list valid options.
+Templates use safe defaults. The generator validates intent, source names, URLs, intervals, and `initial_sync` before writing, and refuses to overwrite without `--force`. Validation errors state what is missing and list valid options.
 
 ## 6. Secrets
 
@@ -177,7 +177,7 @@ Default chain: **parse -> clean -> PII mask -> chunk -> embed -> store**.
 All commands run in-process with core, scoped to authenticated tenant/admin context, and support `--output json` for structured output (in addition to human-readable default) where applicable.
 
 - **Auth:** `auth login`, `token rotate`
-- **Templates/discovery:** `init --source <type>`, `init --intent <intent>`, `list sources|intents|formats`
+- **Templates/discovery:** `init --source <type>`, `init --intent <intent>`, `generate --intent <intent> -f <file> [--source <spec>]... [--append] [--force]`, `list sources|intents|formats`
 - **Config & validation:** `validate -f <file>`, `apply -f <file> [--dry-run] [--force]`, `source test -f <file>`
 - **Pipelines:** `pipelines list`, `pipelines show --intent <intent>`, `pipelines delete --intent <intent> [--purge-data]`
 - **Sources:** `source delete --intent <intent> --source <name> [--purge-data]`, `pause --intent <intent> --source <name>`, `resume --intent <intent> --source <name>`

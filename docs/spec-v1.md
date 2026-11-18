@@ -1,6 +1,6 @@
 # Talaint v1 Spec (Foundation)
 
-Concrete spec for v1 foundation, aligned with `docs/requirements.md` and `docs/architecture.md`. Keep it simple; expand later.
+Concrete spec for v1 foundation, aligned with `docs/requirements.md` and `docs/architecture.md`. For end-to-end usage examples and the full command reference, see `docs/cli-guide.md`. Keep it simple; expand later.
 
 ## 1. YAML Config Schema
 
@@ -212,6 +212,7 @@ CREATE TABLE run_logs (
 ## 4. CLI Contract (v1)
 
 - **Global:** `--output text|json` (default `text`). JSON mode emits machine-readable objects/arrays and stable error shape for agent/tooling.
+- **Environment:** `DATABASE_URL`, `TALAINT_KEK_BASE64` (32-byte base64 KEK), `TALAINT_ADMIN_TOKEN` (initial admin bootstrap), and `TALAINT_SECRET_<NORMALIZED_NAME>` for secret ingestion.
 - **Auth context:** `auth login` stores token locally (e.g. user config/credentials file); tenant/admin resolved from token. `auth login --admin` for admin token. `token rotate` rotates current tenant token.
 
 | Command | Key args/options | Behavior |
@@ -219,6 +220,7 @@ CREATE TABLE run_logs (
 | `auth login` | `[--admin] --token <token>` | store token for subsequent commands |
 | `token rotate` | - | rotate current tenant token |
 | `init` | `--source <type>` \| `--intent <intent>` | print template (YAML) to stdout |
+| `generate` | `--intent <intent> -f <file> [--source <spec>]... [--append] [--force]` | generate and validate a YAML pipeline file; default to two example sources |
 | `list` | `sources\|intents\|formats` | discovery |
 | `validate` | `-f <file>` | schema + ref checks (no persist) |
 | `apply` | `-f <file> [--dry-run] [--force]` | validate/health-check/persist+reconcile; dry-run shows plan |
@@ -240,6 +242,8 @@ CREATE TABLE run_logs (
 | `admin tenant create` | `--name <name>` | create tenant, emit one-time token once |
 | `admin tenant list` | - | list tenants |
 | `admin token rotate` | `--tenant <id\|name>` | issue/rotate tenant token |
+
+`generate --source` uses comma-separated `key=value` fields: `name`, `url`, `type`, `interval`, `initial_sync`, `secret`, `header.<NAME>`, `method`, `record_path`. It rejects invalid values before writing and refuses to overwrite without `--force`.
 
 ## 5. Operational Defaults (v1)
 

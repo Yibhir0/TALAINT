@@ -55,3 +55,51 @@ pub struct CheckpointRow {
     pub cursor_state: Value,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AuthTokenRow {
+    pub id: Uuid,
+    pub kind: String,
+    pub tenant_id: Option<Uuid>,
+    pub token_hash: String,
+    pub created_at: DateTime<Utc>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub last_used_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TenantKeyRow {
+    pub tenant_id: Uuid,
+    pub wrapped_dek: Vec<u8>,
+    pub key_version: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SecretRow {
+    pub tenant_id: Uuid,
+    pub name: String,
+    pub nonce: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+    pub key_version: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct SecretMetaRow {
+    pub name: String,
+    pub key_version: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RunLogRow {
+    pub id: i64,
+    pub job_id: Uuid,
+    pub ts: DateTime<Utc>,
+    pub level: String,
+    pub message: String,
+    pub data: Option<Value>,
+}

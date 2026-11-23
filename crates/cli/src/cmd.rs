@@ -940,17 +940,50 @@ pub fn parse_source_spec(spec: &str) -> Result<GeneratedSource> {
     })
 }
 
-fn default_source_specs() -> Vec<GeneratedSource> {
-    vec![
-        parse_source_spec(
-            "name=my-http-source,url=http://localhost:8080/data,secret=api_token,interval=1m,initial_sync=full",
-        )
-        .expect("valid default source"),
-        parse_source_spec(
-            "name=my-second-http-source,url=http://localhost:8080/other-data,interval=5m,initial_sync=latest",
-        )
-        .expect("valid default source"),
-    ]
+async fn stored_sources_for_intent(intent: &Intent) -> Result<(Vec<SourceConfig>, Option<Value>)> {
+    let ctx = AppCtx::connect().await?;
+    let (tenant, _) = require_tenant(&ctx.pool).await?;
+    let pipeline = repos::get_pipeline_by_intent(&ctx.pool, tenant.id, intent.as_str())
+        .await?
+        .ok_or_else(|| {
+            anyhow!(
+                "no stored pipeline for intent '{}'; pass --source or copy config/pipeline.example.yaml",
+                intent.as_str()
+            )
+        })?;
+    let rows = repos::list_sources(&ctx.pool, pipeline.id).await?;
+    let mut sources = Vec::new();
+
+    for row in rows {
+        let mut value = row.config;
+        let obj = value
+            .as_object_mut()
+            .ok_or_else(|| anyhow!("stored config for source '{}' is not an object", row.name))?;
+        obj.insert("name".into(), Value::String(row.name.clone()));
+        obj.insert("type".into(), Value::String(row.r#type));
+        obj.insert(
+            "schedule".into(),
+            json!({"interval": row.schedule_interval}),
+        );
+        obj.insert("initial_sync".into(), Value::String(row.initial_sync));
+        let source: SourceConfig = serde_json::from_value(value)
+            .with_context(|| format!("stored config for source '{}' is invalid", row.name))?;
+        sources.push(source);
+    }
+
+    if sources.is_empty() {
+        return Err(anyhow!(
+            "stored pipeline for intent '{}' has no sources",
+            intent.as_str()
+        ));
+    }
+
+    let processing = pipeline
+        .config
+        .get("processing")
+        .filter(|value| !value.is_null())
+        .cloned();
+    Ok((sources, processing))
 }
 
 fn build_source_config(source: GeneratedSource) -> SourceConfig {
@@ -986,16 +1019,20 @@ pub async fn cmd_generate(
     force: bool,
 ) -> Result<()> {
     let intent = Intent::from_str(intent).map_err(|e| anyhow!("{e}"))?;
-    let specs = if source_specs.is_empty() {
-        default_source_specs()
+    let mut stored_processing = None;
+    let mut generated_sources: Vec<SourceConfig> = if source_specs.is_empty() {
+        let (sources, processing) = stored_sources_for_intent(&intent).await?;
+        stored_processing = processing;
+        sources
     } else {
         source_specs
             .iter()
             .map(|spec| parse_source_spec(spec))
             .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .map(build_source_config)
+            .collect()
     };
-    let mut generated_sources: Vec<SourceConfig> =
-        specs.into_iter().map(build_source_config).collect();
 
     let mut seen = BTreeSet::new();
     for source in &generated_sources {
@@ -1034,7 +1071,7 @@ pub async fn cmd_generate(
         PipelineConfig {
             intent,
             sources: generated_sources,
-            processing: None,
+            processing: stored_processing,
         }
     };
 

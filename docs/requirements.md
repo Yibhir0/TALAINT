@@ -114,7 +114,7 @@ Templates use safe defaults. The generator validates intent, source names, URLs,
 ## 10. Control Plane: Tenants & Auth
 
 - Tenants are **created by admins** (not self-serve) and provided a one-time access token to use the CLI.
-- One admin account manages tenants and tokens. Admin authenticates via separate admin token (`TALAINT_ADMIN_TOKEN` or `auth login --admin`).
+- One admin account manages tenants and tokens. Admin authenticates via separate admin token (`TALAINT_ADMIN_TOKEN` or `auth login --admin`). Admin bootstrap is single-use: exactly one admin token row may exist.
 - Each tenant has **one access token** for CLI access; tenant context comes from the authenticated token.
 - Access and admin tokens are **hashed at rest** and shown only once at creation.
 - Tenant can rotate its own token while authenticated (old token invalidated immediately). Admin can rotate/issue a tenant token if locked out.

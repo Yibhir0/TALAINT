@@ -13,13 +13,13 @@ docker compose up -d
 cargo run -q -p talaint-control-plane --bin migrate
 cp .env.example .env
 cargo build -q -p talaint-cli
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml
+cp config/pipeline.example.yaml pipeline.yaml
 cargo run -q -p talaint-cli -- --help
 ```
 
-On Windows, use `copy .env.example .env` instead of `cp`.
+On Windows, use `copy .env.example .env` and `copy config\pipeline.example.yaml pipeline.yaml` instead of `cp`.
 
-The generator writes a valid two-source template and checks intent, interval, URL, and source-name mistakes before writing. Edit `pipeline.yaml` before `validate` or `apply`.
+Copy `config/pipeline.example.yaml` for a public no-secret sample, or pass sources with `generate --source ...`. With no `--source`, `generate` reads the stored pipeline from the DB and rewrites it to YAML. It checks intent, interval, URL, and source-name mistakes before writing.
 
 Edit `.env` before using secrets or admin bootstrap. At minimum, set:
 

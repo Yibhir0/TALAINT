@@ -28,6 +28,11 @@ pub async fn create_admin_token(
     pool: &DbPool,
     token_plaintext: &str,
 ) -> Result<crate::models::AuthTokenRow> {
+    if repos::count_admin_tokens(pool).await? > 0 {
+        return Err(anyhow!(
+            "admin token already bootstrapped; only one admin is allowed"
+        ));
+    }
     let hash = crypto::hash_token(token_plaintext);
     Ok(repos::insert_auth_token(pool, "admin", None, &hash).await?)
 }

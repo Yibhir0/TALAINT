@@ -1,16 +1,8 @@
 intent: rag
 sources:
-  - name: my-http-source
+  - name: jsonplaceholder-posts
     type: http_json
-    url: http://localhost:8080/data
-    headers:
-      Authorization: { ref: api_token }
+    url: https://jsonplaceholder.typicode.com/posts/
     schedule:
       interval: 1m
     initial_sync: full
-  - name: my-second-http-source
-    type: http_json
-    url: http://localhost:8080/other-data
-    schedule:
-      interval: 5m
-    initial_sync: latest

@@ -76,6 +76,12 @@ pub async fn find_active_token_by_hash(
     .await
 }
 
+pub async fn count_admin_tokens(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_tokens WHERE kind = 'admin'")
+        .fetch_one(pool)
+        .await
+}
+
 pub async fn touch_token(pool: &PgPool, token_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE auth_tokens SET last_used_at = now() WHERE id = $1")
         .bind(token_id)

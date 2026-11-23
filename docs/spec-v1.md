@@ -131,6 +131,8 @@ CREATE TABLE auth_tokens (
   last_used_at TIMESTAMPTZ NULL
 );
 
+CREATE UNIQUE INDEX idx_auth_tokens_single_admin ON auth_tokens ((1)) WHERE kind = 'admin';
+
 -- secrets (envelope encryption)
 CREATE TABLE tenant_keys (
   tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
@@ -213,14 +215,14 @@ CREATE TABLE run_logs (
 
 - **Global:** `--output text|json` (default `text`). JSON mode emits machine-readable objects/arrays and stable error shape for agent/tooling.
 - **Environment:** `DATABASE_URL`, `TALAINT_KEK_BASE64` (32-byte base64 KEK), `TALAINT_ADMIN_TOKEN` (initial admin bootstrap), and `TALAINT_SECRET_<NORMALIZED_NAME>` for secret ingestion.
-- **Auth context:** `auth login` stores token locally (e.g. user config/credentials file); tenant/admin resolved from token. `auth login --admin` for admin token. `token rotate` rotates current tenant token.
+- **Auth context:** `auth login` stores token locally (e.g. user config/credentials file); tenant/admin resolved from token. `auth login --admin` bootstraps the single admin token only once. `token rotate` rotates current tenant token.
 
 | Command | Key args/options | Behavior |
 |---|---|---|
 | `auth login` | `[--admin] --token <token>` | store token for subsequent commands |
 | `token rotate` | - | rotate current tenant token |
 | `init` | `--source <type>` \| `--intent <intent>` | print template (YAML) to stdout |
-| `generate` | `--intent <intent> -f <file> [--source <spec>]... [--append] [--force]` | generate and validate a YAML pipeline file; default to two example sources |
+| `generate` | `--intent <intent> -f <file> [--source <spec>]... [--append] [--force]` | generate and validate a YAML pipeline file; with no `--source`, load stored sources from the DB and error if none exist |
 | `list` | `sources\|intents\|formats` | discovery |
 | `validate` | `-f <file>` | schema + ref checks (no persist) |
 | `apply` | `-f <file> [--dry-run] [--force]` | validate/health-check/persist+reconcile; dry-run shows plan |

@@ -172,6 +172,8 @@ cargo run -q -p talaint-cli -- --output json auth login --admin --token "<admin-
 
 On first successful admin login, the CLI inserts a hashed admin token into the database. Later logins with the same token resolve against the stored hash.
 
+Only one admin token is allowed in the database. Once bootstrapped, attempts to create another admin token are rejected by both the CLI logic and a database unique index.
+
 If `TALAINT_ADMIN_TOKEN` is changed after bootstrap, the old admin token remains active; there is no admin token rotation command in M2.
 
 ### 4.2 Create a tenant
@@ -345,25 +347,27 @@ Connector-specific fields are preserved in the source config stored in PostgreSQ
 
 ### 6.6 Templates and discovery
 
-Use the generator to create a validated YAML file:
+For a fresh no-secret sample, copy the checked-in template:
 
 ```powershell
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml
+Copy-Item config\pipeline.example.yaml pipeline.yaml
 ```
 
 ```bash
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml
+cp config/pipeline.example.yaml pipeline.yaml
 ```
 
-With no `--source`, the generator writes two example sources. To define sources directly, repeat `--source` with comma-separated `key=value` fields:
+The template points at `https://jsonplaceholder.typicode.com/posts/`. To define sources directly, repeat `--source` with comma-separated `key=value` fields:
 
 ```powershell
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --source 'name=primary,url=http://localhost:8080/data,secret=api_token' --source 'name=secondary,url=http://localhost:8080/other,interval=5m,initial_sync=latest'
+cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --source 'name=primary,url=https://api.example.com/data,secret=api_token' --source 'name=secondary,url=https://api.example.com/other,interval=5m,initial_sync=latest'
 ```
 
 ```bash
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --source 'name=primary,url=http://localhost:8080/data,secret=api_token' --source 'name=secondary,url=http://localhost:8080/other,interval=5m,initial_sync=latest'
+cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --source 'name=primary,url=https://api.example.com/data,secret=api_token' --source 'name=secondary,url=https://api.example.com/other,interval=5m,initial_sync=latest'
 ```
+
+Running `generate` with no `--source` loads the stored pipeline for the tenant from Postgres and rewrites it to YAML. It fails if no pipeline is stored for that intent, rather than inventing a URL in code.
 
 Supported source fields:
 
@@ -380,11 +384,11 @@ Supported source fields:
 The generator rejects invalid intents, URLs, intervals, `initial_sync` values, duplicate names, and unsupported source types. It refuses to overwrite an existing file unless `--force` is set. Use `--append` to add sources to an existing file:
 
 ```powershell
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --append --source 'name=third,url=http://localhost:8080/third,interval=30s'
+cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --append --source 'name=third,url=https://api.example.com/third,interval=30s'
 ```
 
 ```bash
-cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --append --source 'name=third,url=http://localhost:8080/third,interval=30s'
+cargo run -q -p talaint-cli -- generate --intent rag --file pipeline.yaml --append --source 'name=third,url=https://api.example.com/third,interval=30s'
 ```
 
 A checked-in template is also available at `config/pipeline.example.yaml`. You can also print a basic template from the CLI:
@@ -604,7 +608,7 @@ All commands support the global `--output text|json` option.
 | `token rotate` | tenant | yes | rotate current tenant token and update local credentials |
 | `init --intent <intent>` | none | no | print intent template |
 | `init --source <type>` | none | no | print source template |
-| `generate --intent <intent> -f <file> [--source <spec>]... [--append] [--force]` | none | no | generate and validate a YAML pipeline file |
+| `generate --intent <intent> -f <file> [--source <spec>]... [--append] [--force]` | tenant when no `--source` | when no `--source` | generate and validate a YAML pipeline file; no-source mode reads stored sources from the DB |
 | `list sources` | none | no | list connector types |
 | `list intents` | none | no | list supported intents |
 | `list formats` | none | no | list known formats |
@@ -648,18 +652,19 @@ $created = cargo run -q -p talaint-cli -- --output json admin tenant create --na
 $created.token
 
 cargo run -q -p talaint-cli -- --output json auth login --token $created.token
-cargo run -q -p talaint-cli -- --output json secrets set api_token
-cargo run -q -p talaint-cli -- --output json generate --intent rag --file pipeline.yaml
+# Optional when your source needs an API secret:
+# cargo run -q -p talaint-cli -- --output json secrets set api_token
+Copy-Item config\pipeline.example.yaml pipeline.yaml
 cargo run -q -p talaint-cli -- --output json validate -f pipeline.yaml
 cargo run -q -p talaint-cli -- --output json source test -f pipeline.yaml
 cargo run -q -p talaint-cli -- --output json apply -f pipeline.yaml --dry-run
 cargo run -q -p talaint-cli -- --output json apply -f pipeline.yaml
 cargo run -q -p talaint-cli -- --output json pipelines show --intent rag
-cargo run -q -p talaint-cli -- --output json runs trigger --intent rag --source my-http-source
+cargo run -q -p talaint-cli -- --output json runs trigger --intent rag --source jsonplaceholder-posts
 cargo run -q -p talaint-cli -- --output json runs list --intent rag
 ```
 
-Edit `pipeline.yaml` so each source `url`, `name`, and secret reference match your environment before applying. Remove a `headers` block if no secret is needed.
+The checked-in sample uses a public endpoint and needs no secret. Edit `pipeline.yaml` so each source `url`, `name`, and secret reference match your environment before applying. Add a `headers` block only if your endpoint needs one.
 
 ## 14. Troubleshooting
 
